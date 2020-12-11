@@ -323,7 +323,17 @@ static void touchkey_init_hw(void)
 	defined(CONFIG_MACH_M3) || \
 	defined(CONFIG_MACH_T0) || \
 	defined(CONFIG_MACH_BAFFIN)
-	gpio_request(GPIO_3_TOUCH_EN, "gpio_3_touch_en");
+
+#if defined(CONFIG_MACH_M3_JPN_DCM)
+	if (system_rev < 3)
+		gpio_request(GPIO_3_TOUCH_EN_R1, "gpio_3_touch_en");
+	else
+		gpio_request(GPIO_3_TOUCH_EN, "gpio_3_touch_en");
+#else
+ 	gpio_request(GPIO_3_TOUCH_EN, "gpio_3_touch_en");
+#endif
+
+
 #if defined(CONFIG_MACH_C1_KOR_LGT)
 	gpio_request(GPIO_3_TOUCH_LDO_EN, "gpio_3_touch_ldo_en");
 #endif
@@ -409,10 +419,24 @@ static int touchkey_power_on(bool on)
 static int touchkey_led_power_on(bool on)
 {
 #if defined(LED_LDO_WITH_EN_PIN)
+#if defined(CONFIG_MACH_M3_JPN_DCM)
+	if (system_rev < 3) {
+		if (on)
+			gpio_direction_output(GPIO_3_TOUCH_EN_R1, 1);
+		else
+			gpio_direction_output(GPIO_3_TOUCH_EN_R1, 0);
+	} else {
+		if (on)
+			gpio_direction_output(GPIO_3_TOUCH_EN, 1);
+		else
+			gpio_direction_output(GPIO_3_TOUCH_EN, 0);
+	}
+#else
 	if (on)
 		gpio_direction_output(GPIO_3_TOUCH_EN, 1);
 	else
 		gpio_direction_output(GPIO_3_TOUCH_EN, 0);
+#endif
 #else
 	struct regulator *regulator;
 
@@ -2861,6 +2885,29 @@ static inline int need_i2c5(void)
 #if defined(CONFIG_FELICA)
 static void felica_setup(void)
 {
+#if defined(CONFIG_MACH_M3_JPN_DCM)
+	if (system_rev < 3) {
+		/* I2C SDA GPY2[4] */
+		gpio_request(FELICA_GPIO_I2C_SDA_R1, FELICA_GPIO_I2C_SDA_NAME);
+		s3c_gpio_setpull(FELICA_GPIO_I2C_SDA_R1, S3C_GPIO_PULL_DOWN);
+		gpio_free(FELICA_GPIO_I2C_SDA_R1);
+
+		/* I2C SCL GPY2[5] */
+		gpio_request(FELICA_GPIO_I2C_SCL_R1, FELICA_GPIO_I2C_SCL_NAME);
+		s3c_gpio_setpull(FELICA_GPIO_I2C_SCL_R1, S3C_GPIO_PULL_DOWN);
+		gpio_free(FELICA_GPIO_I2C_SCL_R1);
+	} else {
+		/* I2C SDA GPY2[4] */
+		gpio_request(FELICA_GPIO_I2C_SDA, FELICA_GPIO_I2C_SDA_NAME);
+		s3c_gpio_setpull(FELICA_GPIO_I2C_SDA, S3C_GPIO_PULL_DOWN);
+		gpio_free(FELICA_GPIO_I2C_SDA);
+
+		/* I2C SCL GPY2[5] */
+		gpio_request(FELICA_GPIO_I2C_SCL, FELICA_GPIO_I2C_SCL_NAME);
+		s3c_gpio_setpull(FELICA_GPIO_I2C_SCL, S3C_GPIO_PULL_DOWN);
+		gpio_free(FELICA_GPIO_I2C_SCL);
+	}
+#elif defined(CONFIG_MACH_T0_JPN_LTE_DCM)
 	/* I2C SDA GPY2[4] */
 	gpio_request(FELICA_GPIO_I2C_SDA, FELICA_GPIO_I2C_SDA_NAME);
 	s3c_gpio_setpull(FELICA_GPIO_I2C_SDA, S3C_GPIO_PULL_DOWN);
@@ -2870,7 +2917,7 @@ static void felica_setup(void)
 	gpio_request(FELICA_GPIO_I2C_SCL, FELICA_GPIO_I2C_SCL_NAME);
 	s3c_gpio_setpull(FELICA_GPIO_I2C_SCL, S3C_GPIO_PULL_DOWN);
 	gpio_free(FELICA_GPIO_I2C_SCL);
-
+#endif
 	/* PON GPL2[7] */
 	gpio_request(FELICA_GPIO_PON, FELICA_GPIO_PON_NAME);
 	s3c_gpio_setpull(FELICA_GPIO_PON, S3C_GPIO_PULL_DOWN);
@@ -2918,6 +2965,21 @@ static void __init midas_machine_init(void)
 	  */
 	__raw_writel(0x0, S5P_CMU_RESET_ISP_SYS);
 
+#if defined(CONFIG_MACH_M3_JPN_DCM)
+	if (system_rev < 3) {
+		i2c10_platdata.sda_pin = GPIO_MSENSOR_SDA_18V_R1;
+		i2c10_platdata.scl_pin = GPIO_MSENSOR_SCL_18V_R1;
+#ifdef CONFIG_BATTERY_WPC_CHARGER
+		max77693_charger_pdata.vbus_irq_gpio = GPIO_V_BUS_INT_R1;
+#endif
+#if defined(CONFIG_FELICA)
+		i2c30_gpio_platdata.sda_pin = FELICA_GPIO_I2C_SDA_R1;
+		i2c30_gpio_platdata.scl_pin = FELICA_GPIO_I2C_SCL_R1;
+#endif
+	}
+#endif
+
+
 	/* initialise the gpios */
 	midas_config_gpio_table();
 	exynos4_sleep_gpio_table_set = midas_config_sleep_gpio_table;
@@ -2950,7 +3012,7 @@ static void __init midas_machine_init(void)
 #endif
 
 #ifdef CONFIG_S3C_DEV_I2C4
-#if defined(CONFIG_MACH_T0)
+#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_M3_JPN_DCM)
 	s3c_i2c4_set_platdata(NULL);
 #else
 	s3c_i2c4_set_platdata(NULL);
@@ -3195,7 +3257,7 @@ static void __init midas_machine_init(void)
 	platform_add_devices(midas_devices, ARRAY_SIZE(midas_devices));
 
 #ifdef CONFIG_S3C_ADC
-#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_T0)
+#if defined(CONFIG_MACH_GC1) || defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_M3_JPN_DCM)
 	platform_device_register(&s3c_device_adc);
 #else
 	if (system_rev != 3)
@@ -3387,9 +3449,9 @@ static void __init midas_machine_init(void)
 	/* 400 kHz for initialization of MMC Card  */
 	__raw_writel((__raw_readl(EXYNOS4_CLKDIV_FSYS3) & 0xfffffff0)
 		     | 0x9, EXYNOS4_CLKDIV_FSYS3);
-#ifdef CONFIG_MACH_T0
-	__raw_writel((__raw_readl(EXYNOS4_CLKDIV_FSYS2) & 0xfff0fff0)
-		     | 0x90009, EXYNOS4_CLKDIV_FSYS2);
+#if defined(CONFIG_MACH_T0) || defined(CONFIG_MACH_M3_JPN_DCM)
+ 	__raw_writel((__raw_readl(EXYNOS4_CLKDIV_FSYS2) & 0xfff0fff0)
+ 		     | 0x90009, EXYNOS4_CLKDIV_FSYS2);
 #else
 	__raw_writel((__raw_readl(EXYNOS4_CLKDIV_FSYS2) & 0xfff0fff0)
 		     | 0x80008, EXYNOS4_CLKDIV_FSYS2);
